@@ -1,0 +1,7 @@
+__pycache__/
+.venv/
+.env
+*.log
+*.err
+uploads/*.wav
+!uploads/.gitkeep

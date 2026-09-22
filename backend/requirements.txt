@@ -1,0 +1,23 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+supabase>=2.9
+# Real ECAPA-TDNN (CPU). Install torch from the CPU index FIRST to avoid the
+# multi-GB CUDA build:
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+torchaudio>=2.4
+speechbrain>=1.0
+# GPU laptop: CUDA torch comes from the PyTorch index (see README), and the
+# spoof scorer uses the GPU ORT build. CPU-only machines: install `onnxruntime`
+# instead of `onnxruntime-gpu` and torch from the CPU index.
+onnxruntime-gpu>=1.17
+# Transcription (CPU/int8 — cublas DLLs missing for GPU decode on this laptop).
+# NOTE: faster-whisper metadata wants plain `onnxruntime`, but we use the
+# -gpu build (same module); its VAD path is never used, so the mismatch is
+# harmless. `av` is required at import time.
+faster-whisper>=1.0
+av>=11
+httpx>=0.27  # Groq cloud-LLM report stage
+python-multipart>=0.0.9
+python-dotenv>=1.0
+tzdata>=2024.1  # Windows has no system tz database
