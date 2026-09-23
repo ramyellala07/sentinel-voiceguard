@@ -23,15 +23,28 @@ Browser ──HTTPS──▶ Vercel (React SPA)
    - `service_role` key → `SUPABASE_KEY` (**secret** — backend only, never
      put it in Vercel env vars or the frontend bundle).
 
-## 2. Backend on Render (or Railway / Fly.io)
+## 2a. Backend on HuggingFace Spaces — Docker (free, recommended for demos)
 
-The backend is a plain FastAPI app: `pip install -r requirements.txt`,
-`uvicorn main:app --host 0.0.0.0 --port $PORT`.
+Free 16 GB CPU fits the models; Render free (512 MB) will OOM-crash on boot.
 
-> ⚠️ `onnxruntime-gpu` in `backend/requirements.txt` will fail to install on
-> CPU cloud machines. Use a CPU requirement set or swap to `onnxruntime`.
-> Torch+speechbrain will also make the first deploy slow (model download on
-> startup; uploads warm up in the background).
+1. huggingface.co → New **Space** → SDK **Docker** → name it → Create.
+2. The Space repo root must hold the backend files + `backend/Dockerfile`:
+   push the *contents* of `voiceguard-ai/backend/` (main.py, models.py, …,
+   requirements.txt, Dockerfile) to the Space repo root.
+3. Space → **Settings → Variables and Secrets**: `SUPABASE_URL`,
+   `SUPABASE_KEY` (secret), `GROQ_API_KEY` (secret), `FRONTEND_URL`
+   (fill after step 3, then **Factory reboot** the Space).
+4. Wait for the build, then open `/api/health`. First boot downloads ~1.5 GB
+   of models — be patient once, then it stays warm while used.
+
+## 2b. Backend on Render (or Railway / Fly.io)
+
+The backend is a plain FastAPI app (or `render.yaml` Blueprint at repo root):
+`pip install -r requirements.txt`,
+`uvicorn main:app --host 0.0.0.0 --port $PORT`. Pick a **2 GB+ plan**.
+
+> `backend/requirements.txt` is CPU-cloud safe. Torch+speechbrain make the
+> first deploy slow (model downloads on startup; warmups run in background).
 
 On Render: **New → Web Service → connect the repo →**
 - **Root directory:** `backend`

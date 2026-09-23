@@ -7,10 +7,10 @@ supabase>=2.9
 torch>=2.4
 torchaudio>=2.4
 speechbrain>=1.0
-# GPU laptop: CUDA torch comes from the PyTorch index (see README), and the
-# spoof scorer uses the GPU ORT build. CPU-only machines: install `onnxruntime`
-# instead of `onnxruntime-gpu` and torch from the CPU index.
-onnxruntime-gpu>=1.17
+# CPU cloud default (Render/HF free tiers have no GPU and onnxruntime-gpu
+# FAILS to install there). GPU laptop: pip install onnxruntime-gpu instead
+# (they conflict — only one may be installed).
+onnxruntime>=1.17
 # Transcription (CPU/int8 — cublas DLLs missing for GPU decode on this laptop).
 # NOTE: faster-whisper metadata wants plain `onnxruntime`, but we use the
 # -gpu build (same module); its VAD path is never used, so the mismatch is

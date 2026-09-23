@@ -1,0 +1,25 @@
+# One-click Render deploy (dashboard: New -> Blueprint -> select repo).
+# NOTE: pick a 2GB+ plan (Starter or higher). The free 512MB plan WILL
+# OOM-crash loading the models. For $0 hosting see DEPLOY.md (HF Spaces).
+services:
+  - type: web
+    name: sentinel-backend
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      # CPU torch (small, fast). Default index would pull the CUDA build.
+      - key: PIP_EXTRA_INDEX_URL
+        value: https://download.pytorch.org/whl/cpu
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
