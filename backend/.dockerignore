@@ -1,0 +1,15 @@
+# Never bake into the cloud image:
+.env
+.env.*
+!.env.example
+
+# Never ship the local virtualenv or caches:
+.venv/
+__pycache__/
+*.pyc
+*.log
+
+# Runtime audio/state (recreated or cloud-backed):
+uploads/*.wav
+val/
+.git/

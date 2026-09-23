@@ -1,4 +1,4 @@
-# Sentinel backend — CPU cloud image (Render / HuggingFace Spaces Docker).
+# Sentinel backend — CPU cloud image (Cloud Run / Render).
 # GPU is auto-used when present (code falls back to CPU otherwise).
 FROM python:3.12-slim
 
