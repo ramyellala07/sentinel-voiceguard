@@ -24,16 +24,79 @@ export const BACKEND_STATUS = {
 
 const delay = (ms = 300) => new Promise((r) => setTimeout(r, ms));
 
+// ---- operator auth (Supabase Auth via our backend; token in localStorage) ----
+const TOKEN_KEY = "sentinel_token";
+
+export function getToken() {
+  try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; }
+}
+
+function authHeader() {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+export function clearToken() {
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* noop */ }
+}
+
+export async function login(email, password) {
+  if (!BACKEND) throw new Error("No backend configured");
+  const res = await fetch(`${BACKEND}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.detail || "Login failed");
+  }
+  const data = await res.json();
+  try { localStorage.setItem(TOKEN_KEY, data.access_token); } catch { /* noop */ }
+  return data.user;
+}
+
+export function logout() {
+  clearToken();
+}
+
+export async function fetchMe() {
+  const t = getToken();
+  if (!BACKEND || !t) throw new Error("no-session");
+  const res = await fetch(`${BACKEND}/api/auth/me`, { headers: authHeader() });
+  if (!res.ok) {
+    clearToken();
+    throw new Error("session-expired");
+  }
+  const data = await res.json();
+  if (!data.user) throw new Error("no-session");
+  return data.user;
+}
+
 async function tryBackend(path, options, fallback, timeoutMs = 8000) {
   if (!BACKEND) return fallback();
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(`${BACKEND}${path}`, { ...options, signal: ctrl.signal });
+    const merged = { ...options, signal: ctrl.signal };
+    merged.headers = { ...(options?.headers || {}), ...authHeader() };
+    const res = await fetch(`${BACKEND}${path}`, merged);
     clearTimeout(t);
+    if (res.status === 401) {
+      // Session dead: never mask auth failures with mock data.
+      clearToken();
+      const err = new Error("session-expired");
+      err.auth = true;
+      throw err;
+    }
     if (!res.ok) throw new Error(`backend ${res.status}`);
     return await res.json();
   } catch (e) {
+    if (e.auth) {
+      // Expired mid-session: bounce to the login gate instead of showing mocks.
+      try { window.location.reload(); } catch { /* noop */ }
+      throw e;
+    }
     console.warn(`[api] backend ${path} unreachable (${e.message}) — using mock data.`);
     return fallback();
   }

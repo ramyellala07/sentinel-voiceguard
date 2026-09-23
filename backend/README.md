@@ -84,6 +84,15 @@ report (verdict, metadata, per-domain findings, reasoning trace with fusion
 weights, recommendations, limitations); UI badges GENERATED LIVE vs TEMPLATE.
 No key / offline / rate-limit → template serves instantly. Nothing breaks.
 
+## Operator auth (Supabase Auth, backend-owned)
+
+No anonymous access: every `/api/*` route (except health/docs/auth/uploads)
+requires `Authorization: Bearer <JWT>`. Flow: `POST /api/auth/login`
+(email+password) → token in localStorage → sent on all calls → 401 bounces
+to the login gate (never masked by mock data). Users are created in Supabase
+Dashboard → Authentication → Users (no public signup by design). Frontend
+holds zero Supabase keys.
+
 ## Hardening (active)
 
 - Uploads: 15 MB cap, empty-file rejection, WAV content validated by header

@@ -15,12 +15,13 @@ import os
 import random
 import uuid
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import analysis
+import auth as auth_svc
 import config
 import db_supabase
 import models
@@ -109,6 +110,50 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 app.router.routes.extend(dashboard_router.router.routes)
 
 MAX_BYTES = 15 * 1024 * 1024
+
+
+@app.middleware("http")
+async def auth_gate(request, call_next):
+    """JWT gate on /api/*. Open: /, health, docs, auth, uploads playback."""
+    from fastapi.responses import JSONResponse
+
+    path = request.url.path
+    if (path == "/" or path.startswith(("/api/health", "/docs", "/openapi",
+                                        "/redoc", "/uploads", "/api/auth/login"))):
+        return await call_next(request)
+    if not path.startswith("/api/"):
+        return await call_next(request)
+    token = (request.headers.get("authorization") or "")
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    if not token:
+        return JSONResponse({"detail": "Not authenticated — operator login required"},
+                            status_code=401)
+    try:
+        request.state.user = await asyncio.to_thread(auth_svc.verify_token, token)
+    except Exception:  # noqa: BLE001 — expired/revoked/forged
+        return JSONResponse({"detail": "Invalid or expired session"},
+                            status_code=401)
+    return await call_next(request)
+
+
+@app.post("/api/auth/login")
+async def login(body: dict):
+    """Operator login -> {access_token, user}. Users are created in Supabase
+    Dashboard -> Authentication -> Users (no public signup by design)."""
+    email, password = (body or {}).get("email", ""), (body or {}).get("password", "")
+    if not email or not password:
+        raise HTTPException(400, "Email and password required")
+    try:
+        return await asyncio.to_thread(auth_svc.login_user, email, password)
+    except Exception as e:  # noqa: BLE001 — bad creds or Auth disabled
+        raise HTTPException(401, f"Login failed: {str(e)[:120]}")
+
+
+@app.get("/api/auth/me")
+async def me(request: Request):
+    """Validate current session (called by the frontend on load)."""
+    return {"user": getattr(request.state, "user", None)}
 
 
 @app.get("/")
