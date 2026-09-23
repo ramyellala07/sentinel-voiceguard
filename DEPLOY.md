@@ -23,19 +23,23 @@ Browser ──HTTPS──▶ Vercel (React SPA)
    - `service_role` key → `SUPABASE_KEY` (**secret** — backend only, never
      put it in Vercel env vars or the frontend bundle).
 
-## 2a. Backend on HuggingFace Spaces — Docker (free, recommended for demos)
+## 2a. Backend options (pick one — HF Spaces Docker now needs PRO, skip it)
 
-Free 16 GB CPU fits the models; Render free (512 MB) will OOM-crash on boot.
+**Option A — laptop + ngrok (free, today, full GPU).** Best for demo day:
+1. Install ngrok, run `ngrok http 5000` while uvicorn serves locally.
+2. You get `https://xxxx.ngrok-free.app` → use it as `VITE_BACKEND_URL`.
+Trade-off: laptop must stay awake and online during the demo.
 
-1. huggingface.co → New **Space** → SDK **Docker** → name it → Create.
-2. The Space repo root must hold the backend files + `backend/Dockerfile`:
-   push the *contents* of `voiceguard-ai/backend/` (main.py, models.py, …,
-   requirements.txt, Dockerfile) to the Space repo root.
-3. Space → **Settings → Variables and Secrets**: `SUPABASE_URL`,
-   `SUPABASE_KEY` (secret), `GROQ_API_KEY` (secret), `FRONTEND_URL`
-   (fill after step 3, then **Factory reboot** the Space).
-4. Wait for the build, then open `/api/health`. First boot downloads ~1.5 GB
-   of models — be patient once, then it stays warm while used.
+**Option B — Google Cloud Run free tier (free public URL).** 2M requests +
+360k GB-seconds/month free — enough for demo traffic on a 4 GB instance:
+1. GCP project (needs a card on file, free tier isn't charged) → enable Cloud Run.
+2. `gcloud builds submit --tag gcr.io/PROJECT/sentinel-backend voiceguard-ai/backend`
+   then deploy with 4 GB memory, secrets for `SUPABASE_URL/KEY`, `GROQ_API_KEY`.
+3. Cold starts download ~1.5 GB of models — first request takes minutes; ping
+   `/api/health` 10 min before presenting.
+
+**Option C — Render/Railway paid ($7+/mo, easiest).** Blueprint `render.yaml`
+at repo root; pick a **2 GB+ plan** (free 512 MB **will OOM-crash** on boot).
 
 ## 2b. Backend on Render (or Railway / Fly.io)
 
