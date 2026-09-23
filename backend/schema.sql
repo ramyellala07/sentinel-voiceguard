@@ -73,7 +73,19 @@ insert into reports (key, title, level, summary, text, recommendation) values
   ('high', 'HIGH RISK — Likely Bot / Cloned Voice Report', 'HIGH',
    'Strong indicators of AI-generated or cloned speech.',
    'Voice authenticity check FAILED. Vocoder-like flat prosody with missing breathing artefacts. Block the call, preserve the recording, and alert the security team.',
-   'BLOCK — preserve recording and alert the security team.')
+   'BLOCK — preserve recording and alert the security team.'),
+  ('otp-fraud', 'HIGH RISK — OTP / Credential Harvesting Report', 'HIGH',
+   'Caller is extracting one-time passwords or credentials.',
+   'Voice authenticity check FAILED and the conversation centers on extracting OTPs, PINs or credentials under manufactured urgency. Block immediately, never read out any OTP, and report the number.',
+   'BLOCK — never share OTPs; report the number.'),
+  ('authority-scam', 'HIGH RISK — Authority Impersonation Report', 'HIGH',
+   'Caller claims institutional authority (bank, police, RBI, CBI).',
+   'Voice authenticity check FAILED and the caller claims to represent a bank, police, RBI, CBI or government body. Disconnect, call back on the published number, preserve the recording.',
+   'BLOCK — call back on the published official number.'),
+  ('safe-verified', 'SAFE — Verified Known Speaker Report', 'LOW',
+   'Genuine voice matching an enrolled trusted speaker.',
+   'Voice authenticity check PASSED and the speaker matches an enrolled trusted voiceprint above threshold with no pressure tactics. Allow and proceed normally.',
+   'ALLOW — verified known speaker, proceed normally.')
 on conflict (key) do nothing;
 
 alter table incidents enable row level security;

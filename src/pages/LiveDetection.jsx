@@ -48,6 +48,7 @@ export default function LiveDetection() {
   const [simSample, setSimSample] = useState("random"); // "random" = surprise, or a file name
   const [simulating, setSimulating] = useState(false);
   const [simProgress, setSimProgress] = useState(0);
+  const [simScenario, setSimScenario] = useState(null);
   const timers = useRef([]);
   const fileInput = useRef(null);
   const pollTimer = useRef(null);
@@ -225,8 +226,7 @@ export default function LiveDetection() {
     setStages(INITIAL_STAGE()); setRisk(4); setRiskLevel("LOW");
     setChallenge(null); setIncident(null); setDemoMode(false); setAnalysis(null);
     setSimulating(true); setSimProgress(0);
-    setStage("audio-input", { status: "active", result: "Live call connecting…" });
-    // Resolve what to send: "random" picks locally if we know samples, else backend randomizes.
+    setStage("audio-input", { status: "active", result: "Live call connecting…" });    // Resolve what to send: "random" picks locally if we know samples, else backend randomizes.
     let toSend = simSample;
     if (toSend === "random") {
       if (samples.length > 0) toSend = samples[Math.floor(Math.random() * samples.length)].file;
@@ -236,6 +236,7 @@ export default function LiveDetection() {
     try {
       const started = await simulateLiveCall(toSend);
       const sid = started.session_id;
+      setSimScenario(started.scenario || null);
       pushLog(`Live session ${sid} (${started.sample || toSend || "sample"}) — polling…`);
       setStage("audio-input", { status: "done", result: `Live call · ${started.sample || "sample"}`, confidence: 99 });
       setStage("audio-processing", { status: "active", result: "Streaming…" });
@@ -368,7 +369,7 @@ export default function LiveDetection() {
       {simulating && (
         <div className="mb-4 border border-emerald-200 bg-emerald-50 p-4">
           <div className="flex justify-between text-[12px] font-bold text-emerald-800">
-            <span>LIVE CALL IN PROGRESS — streaming sample…</span><span>{simProgress}%</span>
+            <span>📞 INCOMING CALL{simScenario ? ` — ${simScenario.title} · ${simScenario.persona}` : " — streaming sample…"}</span><span>{simProgress}%</span>
           </div>
           <div className="h-2 bg-emerald-100 mt-2"><div className="h-full bg-emerald-600 transition-all duration-500" style={{ width: `${simProgress}%` }} /></div>
         </div>
@@ -376,6 +377,11 @@ export default function LiveDetection() {
 
       {analysis && (
         <Card title={`VOICE ANALYSIS RESULT · ${analysis.label?.toUpperCase()} · AI ${analysis.ai_probability}%`} className="mb-4">
+          <div className="mb-3 px-3 py-2.5 bg-slate-800 text-white text-[13px] flex flex-wrap gap-x-5 gap-y-1">
+            <span>📞 <b>{analysis.scenario?.persona || "Unknown caller"}</b>{analysis.scenario?.title ? ` — ${analysis.scenario.title}` : ""}</span>
+            <span>🪪 Identified: <b>{analysis.identified_name ? `${analysis.identified_name} (${analysis.similarity}%)` : `UNKNOWN (best ${analysis.similarity}%)`}</b></span>
+            <span>💬 Asked: <b>{analysis.transcript ? `“${analysis.transcript.slice(0, 80)}${analysis.transcript.length > 80 ? "…" : ""}”` : "no speech detected"}</b></span>
+          </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <div>
               <div className="text-[11px] font-bold tracking-widest text-slate-500 mb-2">AI PROBABILITY OVER TIME (from uploaded audio)</div>

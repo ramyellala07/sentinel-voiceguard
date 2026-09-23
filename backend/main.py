@@ -97,6 +97,9 @@ app.add_middleware(
     # Local dev: allow localhost AND 127.0.0.1 on any port — browsers treat
     # them as different origins, and a mismatch means silent "unreachable".
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    # Production: FRONTEND_URL points at the deployed Vercel origin, e.g.
+    # https://voiceguard-ai.vercel.app (no trailing slash — CORS compares
+    # origins literally).
     allow_origins=[config.FRONTEND_URL],
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
@@ -251,9 +254,10 @@ async def simulate_live_call(sample: str = Form("")):
     else:
         pick = available[0]
     sess = new_session(pick)
+    sess["scenario"] = analysis.scenario_for(pick)
     asyncio.create_task(analysis.simulate_session(sess["session_id"]))
     return {"session_id": sess["session_id"], "sample": pick,
-            "status": "processing",
+            "status": "processing", "scenario": sess["scenario"],
             "poll": f"/api/session/{sess['session_id']}"}
 
 

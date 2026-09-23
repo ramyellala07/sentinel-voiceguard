@@ -19,8 +19,9 @@ UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 SAMPLE_DIR = os.path.join(os.path.dirname(__file__), "samples")
 
 
-def pick_report_key(ai_prob: float) -> str:
-    return reports.pick_key(ai_prob, config.HIGH_RISK_AT, config.MEDIUM_RISK_AT)
+def pick_report_key(ai_prob: float, context=None, match: bool = False) -> str:
+    return reports.pick_report(ai_prob, context, match,
+                               config.HIGH_RISK_AT, config.MEDIUM_RISK_AT)
 
 
 async def run_analysis(blob: bytes, filename: str, session_id: str,
@@ -127,9 +128,11 @@ async def run_analysis(blob: bytes, filename: str, session_id: str,
         "info_requested": list(context.get("indicators", [])),
         "transcript": transcript,
     }
-    template_base = await store.get_report(pick_report_key(ai))
+    template_base = await store.get_report(
+        pick_report_key(ai, context, finger.get("match")))
     # Enrich template to full structure via reports.py (formats scenario_summary)
-    report = reports.build_full_template(pick_report_key(ai), template_base, base_ctx)
+    report = reports.build_full_template(
+        pick_report_key(ai, context, finger.get("match")), template_base, base_ctx)
 
     # Cloud-LLM stage: generated analyst report when a key exists, else the
     # pre-made template. Response always carries both (badge shows which).
@@ -268,7 +271,31 @@ async def simulate_session(session_id: str):
         await asyncio.sleep(1.2)
         update_session(session_id, progress=p, status="processing")
     result = await run_analysis(blob, sess["sample"], session_id)
+    result["scenario"] = scenario_for(sess["sample"])
     update_session(session_id, status="complete", progress=100, result=result)
+
+
+_scenarios = None
+
+
+def scenario_for(filename: str) -> dict:
+    """Scenario metadata for a sample file (title/persona/expected)."""
+    global _scenarios
+    if _scenarios is None:
+        import json
+
+        try:
+            with open(os.path.join(SAMPLE_DIR, "scenarios.json")) as f:
+                _scenarios = json.load(f)
+        except Exception:  # noqa: BLE001
+            _scenarios = {}
+    base = os.path.basename(filename or "")
+    meta = _scenarios.get(base, {}) if isinstance(_scenarios, dict) else {}
+    return {"file": base,
+            "title": meta.get("title", base),
+            "persona": meta.get("persona", "Unknown caller"),
+            "blurb": meta.get("blurb", ""),
+            "expected": meta.get("expected", "")}
 
 
 async def load_sample_bytes(filename: str):
@@ -295,7 +322,7 @@ async def list_samples():
         import storage as storage_svc
 
         rows = await asyncio.to_thread(storage_svc.list_sample_files)
-        return [{**r, "source": "supabase"} for r in rows]
+        out = [{**r, "source": "supabase"} for r in rows]
     except Exception:  # noqa: BLE001
         out = []
         if os.path.isdir(SAMPLE_DIR):
@@ -303,4 +330,6 @@ async def list_samples():
                 if f.lower().endswith(".wav"):
                     out.append({"file": f, "size": os.path.getsize(
                         os.path.join(SAMPLE_DIR, f)), "source": "disk"})
-        return out
+    for r in out:
+        r["scenario"] = scenario_for(r["file"])
+    return out

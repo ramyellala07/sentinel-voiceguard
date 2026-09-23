@@ -1,0 +1,21 @@
+{
+  "_note": "Scenario metadata for simulate-live-call. Keyed by sample filename. Unknown files get a generic persona automatically. Replace tone clips with real spoken recordings keeping these names.",
+  "sample-genuine.wav": {
+    "title": "Routine call",
+    "persona": "Known contact",
+    "blurb": "Everyday conversation. Expected: LOW risk, Safe report.",
+    "expected": "LOW"
+  },
+  "sample-suspicious.wav": {
+    "title": "Unclear call",
+    "persona": "Unknown caller",
+    "blurb": "Ambiguous signals. Expected: MEDIUM risk, challenge path.",
+    "expected": "MEDIUM"
+  },
+  "sample-synthetic.wav": {
+    "title": "Suspected bot call",
+    "persona": "Unknown caller (+91 ••• ••• 4413)",
+    "blurb": "Machine-like voice. Expected: HIGH risk, block path.",
+    "expected": "HIGH"
+  }
+}
