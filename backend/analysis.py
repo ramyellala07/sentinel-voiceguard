@@ -323,7 +323,8 @@ async def list_samples():
 
         rows = await asyncio.to_thread(storage_svc.list_sample_files)
         out = [{**r, "source": "supabase"} for r in rows]
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        print(f"  [samples] storage list failed ({str(e)[:150]}) — disk fallback")
         out = []
         if os.path.isdir(SAMPLE_DIR):
             for f in sorted(os.listdir(SAMPLE_DIR)):

@@ -344,7 +344,8 @@ class SupabaseStore:
 
         try:
             return await asyncio.to_thread(_op)
-        except Exception:  # noqa: BLE001 — table missing? report honestly
+        except Exception as e:  # noqa: BLE001 — table missing? report honestly
+            print(f"  [store] list_speakers failed ({str(e)[:150]}) — returning []")
             return []
 
     async def enrolled_vectors(self):
@@ -359,7 +360,8 @@ class SupabaseStore:
 
         try:
             return await asyncio.to_thread(_op)
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            print(f"  [store] enrolled_vectors failed ({str(e)[:150]}) — returning []")
             return []
 
     async def save_speaker(self, speaker_id: str, name: str, embedding: list,
