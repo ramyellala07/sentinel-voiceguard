@@ -171,6 +171,23 @@ export async function fetchHealth() {
   return tryBackend("/api/health", undefined, async () => ({ status: "mock", mode: "mock" }));
 }
 
+// Strict variant: THROWS when unreachable (no mock fallback). Used by the
+// App-level readiness gate so pages never mount against a warming backend.
+export async function pingBackend(timeoutMs = 5000) {
+  if (!BACKEND) return { status: "mock", mode: "mock" };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${BACKEND}/api/health`, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(`backend ${res.status}`);
+    return await res.json();
+  } catch (e) {
+    clearTimeout(t);
+    throw e;
+  }
+}
+
 // ---- Real audio endpoints (used by LiveDetection / VoiceVerification) ----
 
 export async function analyzeClone(file, opts = {}) {
