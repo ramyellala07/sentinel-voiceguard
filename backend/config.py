@@ -2,8 +2,19 @@
 import os
 
 try:
+    from pathlib import Path
     from dotenv import load_dotenv
 
+    _backend_dir = Path(__file__).resolve().parent
+    _root_dir = _backend_dir.parent
+
+    # 1. Load backend .env if present
+    if (_backend_dir / ".env").is_file():
+        load_dotenv(_backend_dir / ".env")
+    # 2. Load root .env if present
+    if (_root_dir / ".env").is_file():
+        load_dotenv(_root_dir / ".env")
+    # 3. Fallback to standard CWD .env
     load_dotenv()
 except ImportError:
     pass

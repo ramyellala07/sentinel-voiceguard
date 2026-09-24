@@ -16,8 +16,25 @@ export default function VoiceVerification() {
   const fileInput = useRef(null);
   const backendLive = Boolean(import.meta.env.VITE_BACKEND_URL);
 
-  const loadSpeakers = async () => setSpeakers(await fetchSpeakers());
-  useEffect(() => { let live = true; fetchSpeakers().then((rows) => { if (live) setSpeakers(rows); }); return () => { live = false; }; }, []);
+  const loadSpeakers = async () => {
+    const rows = await fetchSpeakers();
+    setSpeakers(rows || []);
+  };
+
+  useEffect(() => {
+    let live = true;
+    fetchSpeakers().then((rows) => {
+      if (live && rows?.length) {
+        setSpeakers(rows);
+        const preferred = rows.find((r) => r.id === "SPK-003") || rows.find((r) => r.enrolled) || rows[0];
+        if (preferred) {
+          setSpeakerId(preferred.id);
+          setName(preferred.name);
+        }
+      }
+    });
+    return () => { live = false; };
+  }, []);
 
   const runEnroll = async (files) => {
     if (!files?.length) return;
@@ -133,8 +150,17 @@ export default function VoiceVerification() {
           <input ref={fileInput} type="file" accept=".wav,audio/wav" multiple className="hidden" onChange={(e) => { runEnroll(e.target.files); e.target.value = ""; }} />
           <div className="mt-3 space-y-1.5">
             {speakers.map((s) => (
-              <div key={s.id} className="flex justify-between border border-slate-200 p-2.5 text-[13px]">
-                <span className="font-bold">{s.name} <span className="font-mono text-slate-400 text-xs">{s.id}</span></span>
+              <div
+                key={s.id}
+                onClick={() => { setSpeakerId(s.id); setName(s.name); }}
+                className={`flex justify-between items-center border p-2.5 text-[13px] cursor-pointer transition-colors ${
+                  speakerId === s.id ? "border-sky-500 bg-sky-50/80" : "border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${speakerId === s.id ? "bg-sky-500" : "bg-slate-300"}`} />
+                  <span className="font-bold text-slate-800">{s.name} <span className="font-mono text-slate-400 text-xs">{s.id}</span></span>
+                </div>
                 <span className={`font-bold ${s.enrolled ? "text-green-700" : "text-amber-700"}`}>
                   {s.enrolled ? `● ENROLLED (${s.samples} clips)` : "○ NOT ENROLLED"}
                 </span>

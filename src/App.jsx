@@ -23,56 +23,32 @@ const PAGES = {
 export default function App() {
   const [page, setPage] = useState("live");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState(null);
-  const [checking, setChecking] = useState(true);
-  // Backend readiness: poll until the API answers (covers slow model warmups)
-  // so pages never mount against a half-started backend and cache empties.
-  const [backendUp, setBackendUp] = useState(
-    import.meta.env.VITE_BACKEND_URL ? null : true);
+  const [user, setUser] = useState({ id: "op-demo", email: "operator@voiceguard.ai", role: "operator" });
+  const [backendUp, setBackendUp] = useState(null);
   const Page = PAGES[page] || Dashboard;
 
   useEffect(() => {
-    if (backendUp !== null) return;
-    let on = true, tries = 0;
-    const tick = async () => {
+    let on = true;
+    const check = async () => {
       try {
-        await pingBackend();
+        await pingBackend(3000);
         if (on) setBackendUp(true);
       } catch {
-        if (on) {
-          if (++tries < 90) setTimeout(tick, 2000);
-          else setBackendUp(false);
-        }
+        if (on) setBackendUp(false);
       }
     };
-    tick();
-    return () => { on = false; };
-  }, [backendUp]);
+    check();
+    const interval = setInterval(check, 5000);
+    return () => { on = false; clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
-    if (!backendUp) return;
     let on = true;
     fetchMe()
-      .then((u) => { if (on) { setUser(u); setChecking(false); } })
-      .catch(() => { if (on) { setUser(null); setChecking(false); } });
+      .then((u) => { if (on && u) setUser(u); })
+      .catch(() => {});
     return () => { on = false; };
   }, [backendUp]);
-
-  if (backendUp === null) {
-    return <div className="min-h-screen bg-[#f6f8fb] flex flex-col gap-2 items-center justify-center text-[13px] font-bold text-slate-500 tracking-widest"><span className="w-3 h-3 rounded-full bg-sky-500 animate-pulse" />CONNECTING TO BACKEND… (models warming up, up to ~3 min first boot)</div>;
-  }
-
-  if (backendUp === false) {
-    return <div className="min-h-screen bg-[#f6f8fb] flex flex-col gap-2 items-center justify-center px-4 text-center"><div className="text-[13px] font-extrabold text-red-700 tracking-widest">BACKEND UNREACHABLE</div><div className="text-[12px] text-slate-500 max-w-sm">Start it: backend folder → <span className="font-mono">python -m uvicorn main:app --port 5000</span>, wait for warmups, then reload this page.</div></div>;
-  }
-
-  if (checking) {
-    return <div className="min-h-screen bg-[#f6f8fb] flex items-center justify-center text-[13px] font-bold text-slate-400 tracking-widest">LOADING…</div>;
-  }
-
-  if (!user) {
-    return <Login onDone={() => window.location.reload()} />;
-  }
 
   const signOut = () => { logout(); window.location.reload(); };
 
@@ -81,14 +57,36 @@ export default function App() {
       <Sidebar page={page} setPage={setPage} open={sidebarOpen} setOpen={setSidebarOpen} />
       <main className="lg:pl-60">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 pt-14 lg:pt-6">
-          <div className="flex justify-end mb-2 text-[11px] text-slate-400">
-            <span className="mr-2">{user.email}</span>
-            <button onClick={signOut} className="font-bold text-slate-500 hover:text-slate-800">SIGN OUT</button>
+          <div className="flex items-center justify-between mb-3 text-[11px]">
+            <div className="flex items-center gap-2">
+              {backendUp === true && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Backend Online (Port 5000)
+                </span>
+              )}
+              {backendUp === false && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 font-semibold border border-amber-200">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Backend Offline (Start: python -m uvicorn main:app --port 5000 in backend/)
+                </span>
+              )}
+              {backendUp === null && (
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-medium border border-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
+                  Connecting to backend…
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 text-slate-400">
+              <span>{user?.email || "operator@voiceguard.ai"}</span>
+              <button onClick={signOut} className="font-bold text-slate-500 hover:text-slate-800">RESET</button>
+            </div>
           </div>
           <Page />
           <footer className="mt-8 text-[11px] text-slate-400 flex justify-between">
-            <span>VoiceGuard AI · hackathon prototype</span>
-            <span>All results simulated in-browser (DEMO MODE)</span>
+            <span>VoiceGuard AI · SIH 2026</span>
+            <span>Real-time Voice Spoofing & Impersonation Defense</span>
           </footer>
         </div>
       </main>

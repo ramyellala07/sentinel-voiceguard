@@ -9,10 +9,37 @@ No keys / Supabase unreachable -> MemoryStore (demo keeps working offline).
 Sessions (simulate-live-call progress) are always in-memory: ephemeral by design.
 """
 import asyncio
+import json
+from pathlib import Path
 
 import db_supabase
 import reports as report_templates
 from datetime import datetime, timezone
+
+DATA_DIR = Path(__file__).resolve().parent / "data"
+SPEAKERS_FILE = DATA_DIR / "speakers.json"
+
+
+def _load_speakers_from_disk() -> dict:
+    if not SPEAKERS_FILE.is_file():
+        return {}
+    try:
+        with open(SPEAKERS_FILE, "r", encoding="utf-8") as f:
+            items = json.load(f)
+            return {s["id"]: s for s in items if isinstance(s, dict) and "id" in s}
+    except Exception as e:
+        print(f"  [store] error loading {SPEAKERS_FILE}: {e}")
+        return {}
+
+
+def _save_speakers_to_disk(speakers: dict | list) -> None:
+    try:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        items = list(speakers.values()) if isinstance(speakers, dict) else list(speakers)
+        with open(SPEAKERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(items, f, indent=2)
+    except Exception as e:
+        print(f"  [store] error saving {SPEAKERS_FILE}: {e}")
 
 _store = None
 
@@ -95,10 +122,14 @@ class MemoryStore:
     def __init__(self):
         self.logs: list[dict] = []
         self.reports = {t["key"]: dict(t) for t in report_templates.TEMPLATES}
-        self.speakers = {
-            "SPK-001": {"id": "SPK-001", "name": "Rahul Sharma", "threshold": 75,
-                        "samples": 0, "enrolled_on": None, "embedding": None},
-        }
+        disk_spks = _load_speakers_from_disk()
+        if disk_spks:
+            self.speakers = disk_spks
+        else:
+            self.speakers = {
+                "SPK-001": {"id": "SPK-001", "name": "Rahul Sharma", "threshold": 75,
+                            "samples": 0, "enrolled_on": None, "embedding": None},
+            }
         self.incidents: list[dict] = []
         self.events: list[dict] = []
         self._seed_soc()
@@ -141,6 +172,7 @@ class MemoryStore:
                     "embedding": embedding, "samples": samples,
                     "enrolled_on": _utcnow()[:10]})
         self.speakers[speaker_id] = spk
+        _save_speakers_to_disk(self.speakers)
         return spk
 
     # ------------------------------------------------- incidents/events ---
@@ -271,6 +303,13 @@ class SupabaseStore:
 
     def __init__(self, sb):
         self.sb = sb
+        # Sync Supabase speakers to disk on startup so offline fallback is ready
+        try:
+            res = self.sb.table("speakers").select("*").execute()
+            if res.data:
+                _save_speakers_to_disk({s["id"]: s for s in res.data})
+        except Exception as e:
+            print(f"  [store] startup sync of speakers to disk: {e}")
 
     async def save_log(self, entry: dict):
         def _op():
@@ -334,7 +373,13 @@ class SupabaseStore:
             res = self.sb.table("speakers").select("*").eq("id", speaker_id).execute()
             return dict(res.data[0]) if res.data else None
 
-        return await asyncio.to_thread(_op)
+        try:
+            spk = await asyncio.to_thread(_op)
+            if spk:
+                return spk
+        except Exception:
+            pass
+        return _load_speakers_from_disk().get(speaker_id)
 
     async def list_speakers(self):
         def _op():
@@ -343,10 +388,16 @@ class SupabaseStore:
             return [self._public(dict(r)) for r in (res.data or [])]
 
         try:
-            return await asyncio.to_thread(_op)
-        except Exception as e:  # noqa: BLE001 — table missing? report honestly
-            print(f"  [store] list_speakers failed ({str(e)[:150]}) — returning []")
-            return []
+            rows = await asyncio.to_thread(_op)
+            if rows:
+                return rows
+        except Exception as e:
+            print(f"  [store] list_speakers from Supabase failed ({str(e)[:120]}) — using disk cache")
+
+        disk_spks = _load_speakers_from_disk()
+        if disk_spks:
+            return [self._public(s) for s in disk_spks.values()]
+        return []
 
     async def enrolled_vectors(self):
         """Enrolled prints for 1:N identification: [{id,name,threshold,embedding}]."""
@@ -359,25 +410,43 @@ class SupabaseStore:
                     if r.get("embedding")]
 
         try:
-            return await asyncio.to_thread(_op)
-        except Exception as e:  # noqa: BLE001
-            print(f"  [store] enrolled_vectors failed ({str(e)[:150]}) — returning []")
-            return []
+            vecs = await asyncio.to_thread(_op)
+            if vecs:
+                return vecs
+        except Exception as e:
+            print(f"  [store] enrolled_vectors from Supabase failed ({str(e)[:120]}) — using disk cache")
+
+        disk_spks = _load_speakers_from_disk()
+        return [{"id": s["id"], "name": s.get("name"),
+                 "threshold": s.get("threshold", 75), "embedding": s["embedding"]}
+                for s in disk_spks.values() if s.get("embedding")]
 
     async def save_speaker(self, speaker_id: str, name: str, embedding: list,
                            samples: int):
         from datetime import date
 
+        row = {"id": speaker_id,
+               "name": name or speaker_id,
+               "threshold": 75,
+               "embedding": embedding, "samples": samples,
+               "enrolled_on": date.today().isoformat()}
+
+        # 1. Always save immediately to local disk cache
+        disk_spks = _load_speakers_from_disk()
+        disk_spks[speaker_id] = row
+        _save_speakers_to_disk(disk_spks)
+
+        # 2. Upsert to Supabase
         def _op():
-            row = {"id": speaker_id,
-                   "name": name or speaker_id,
-                   "embedding": embedding, "samples": samples,
-                   "enrolled_on": date.today().isoformat()}
             self.sb.table("speakers").upsert(row, on_conflict="id").execute()
             res = self.sb.table("speakers").select("*").eq("id", speaker_id).execute()
             return dict(res.data[0]) if res.data else row
 
-        return await asyncio.to_thread(_op)
+        try:
+            return await asyncio.to_thread(_op)
+        except Exception as e:
+            print(f"  [store] Supabase upsert speaker failed ({e}) — saved locally to disk")
+            return row
 
     # ------------------------------------------------- incidents/events ---
     @staticmethod
