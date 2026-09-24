@@ -117,6 +117,11 @@ async def auth_gate(request, call_next):
     """JWT gate on /api/*. Open: /, health, docs, auth, uploads playback."""
     from fastapi.responses import JSONResponse
 
+    # CORS preflights carry no credentials by design — let them through to
+    # CORSMiddleware, or every gated endpoint dies in the browser (curl
+    # never preflights, which is why server-side tests stayed green).
+    if request.method == "OPTIONS":
+        return await call_next(request)
     path = request.url.path
     if (path == "/" or path.startswith(("/api/health", "/docs", "/openapi",
                                         "/redoc", "/uploads", "/api/auth/login"))):
