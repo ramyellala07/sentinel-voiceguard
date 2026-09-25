@@ -1,0 +1,13 @@
+# Railway configuration for the ML backend (backend/)
+# Railway reads this file automatically from the service root.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 120   # first start downloads ML models — needs extra time
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
