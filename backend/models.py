@@ -12,6 +12,13 @@ import struct
 import threading
 import wave
 
+# DEMO_MODE=true: neural nets (ECAPA, AASIST, whisper) are disabled and
+# deterministic lightweight stand-ins serve instead - same API shapes, a
+# fraction of the RAM. Local runs WITHOUT it keep all real models.
+DEMO = os.getenv("DEMO_MODE", "").strip().lower() in ("1", "true", "yes", "on")
+if DEMO:
+    print("  [models] DEMO_MODE on: heuristics active, neural nets disabled")
+
 
 def _clamp(n, lo, hi):
     return max(lo, min(hi, n))
@@ -116,6 +123,8 @@ def _get_spoof():
     Prefers CUDA execution, falls back to CPU. Returns (session, repo).
     """
     global _spoof
+    if DEMO:
+        raise RuntimeError("DEMO_MODE: spoof net disabled")
     if _spoof is None:
         from huggingface_hub import hf_hub_download
 
@@ -308,6 +317,8 @@ def _get_encoder():
     Uses CUDA when torch sees a GPU, else CPU. Returns (encoder, device).
     """
     global _enc, _enc_device
+    if DEMO:
+        raise RuntimeError("DEMO_MODE: encoder disabled")
     if _enc is None:
         import torch
         from speechbrain.inference import EncoderClassifier
@@ -328,7 +339,13 @@ def embed_clip(blob: bytes) -> list[float]:
 
     Enrollment clips must be 16-bit PCM .wav (decoded with stdlib — no ffmpeg
     needed). Resampled to 16kHz mono. Needs >= 0.5 s of audio.
+
+    DEMO_MODE: deterministic hash voiceprint instead (same file -> same
+    vector -> 100 match; different files spread near 0). Keeps enroll and
+    verify fully working with zero model downloads.
     """
+    if DEMO:
+        return _hash_embedding(blob)
     import struct
     import wave
 
@@ -356,6 +373,23 @@ def embed_clip(blob: bytes) -> list[float]:
     return [round(float(v), 6) for v in emb.cpu()]
 
 
+def _hash_embedding(blob: bytes, dim: int = 192) -> list[float]:
+    """Deterministic demo voiceprint: stable per file, spread across files."""
+    import random
+
+    data = bytes(blob)
+    try:
+        with wave.open(io.BytesIO(data), "rb") as w:
+            if w.getnframes() < 8000 or w.getsampwidth() not in (1, 2):
+                raise ValueError("enrollment clips must be .wav of 0.5 s or more")
+    except Exception:
+        raise ValueError("enrollment clips must be 16-bit PCM WAV")
+    rng = random.Random(hashlib.sha256(data).hexdigest())
+    vec = [rng.gauss(0, 1) for _ in range(dim)]
+    norm = math.sqrt(sum(x * x for x in vec)) or 1.0
+    return [round(x / norm, 6) for x in vec]
+
+
 def mean_embedding(vecs: list[list[float]]) -> list[float]:
     n = len(vecs)
     dim = len(vecs[0])
@@ -380,6 +414,8 @@ def _get_transcriber():
     Opt in via WHISPER_DEVICE=cuda if the libs ever land.
     """
     global _tr
+    if DEMO:
+        raise RuntimeError("DEMO_MODE: transcriber disabled")
     if _tr is None:
         from faster_whisper import WhisperModel
 

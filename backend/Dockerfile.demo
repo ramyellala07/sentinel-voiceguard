@@ -1,0 +1,19 @@
+# Sentinel backend — DEMO cloud image (Railway free tier friendly).
+# No ML weights: DEMO_MODE serves deterministic heuristics, same API shapes.
+# Local/full-model runs keep using Dockerfile + requirements.txt.
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEMO_MODE=true
+
+WORKDIR /app
+
+COPY requirements-demo.txt .
+RUN pip install --no-cache-dir -r requirements-demo.txt
+
+COPY . .
+
+ENV PORT=7860
+EXPOSE 7860
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-7860}"]
