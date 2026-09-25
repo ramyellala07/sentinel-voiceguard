@@ -1,13 +1,15 @@
-# Railway configuration for the ML backend (backend/)
+# Railway configuration for the Sentinel demo backend (backend/)
 # Railway reads this file automatically from the service root.
+# NOTE: no startCommand here on purpose — the Dockerfile CMD (sh -c) is the
+# only place that expands $PORT. A bare startCommand runs without a shell,
+# passing the literal string "$PORT" to uvicorn, which crash-loops.
 
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.demo"
 
 [deploy]
-startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/api/health"
-healthcheckTimeout = 120   # first start downloads ML models — needs extra time
+healthcheckTimeout = 120
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
